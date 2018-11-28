@@ -1,0 +1,27 @@
+#!/bin/bash
+
+#PBS -N unet_train
+
+#PBS -q gpu-n1h72
+
+#PBS -l nodes=tule-02.cnca:ppn=1
+
+#PBS -l walltime=71:59:59
+
+#PBS -o /home/mamendez/unet/src/corrida_data_dist_trans_30_epochs.txt
+
+module load opencv/2.4.13.3
+
+module load cuda/8.0.61
+
+module load cudnn-8/6.0.21
+
+module load intelpython/3.5
+
+module load hdf5/1.10.0-patch1
+
+module load tiff/3.9.7
+
+cd $PBS_O_WORKDIR
+
+python ~/unet/src/main.py -d Data -g GT_Distance_Transform -s Dist_Trans 
