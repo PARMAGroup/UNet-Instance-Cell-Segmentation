@@ -96,7 +96,7 @@ def setup_and_run_train(n_channels, n_classes, dir_img, dir_gt, dir_results, loa
                     'state_dict': net.state_dict(),
                     'acc': val_acc,
                     'optimizer' : optimizer.state_dict(),
-                }, path=dir_results)
+                }, path=dir_results, filename="weights"+run+".pth")
 
     time_dif = time.time() - time_start
     print("It tooks %.4f seconds to finish the run." % (time_dif))
