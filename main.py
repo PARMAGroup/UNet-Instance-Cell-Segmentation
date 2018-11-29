@@ -1,10 +1,11 @@
 import torch
+import torch.nn as nn
 import time
 from optparse import OptionParser
 
 from model import UNet
 from dataset import get_dataloaders
-from train_val import DiceLoss, train_net, val_net
+from train_val import DiceLoss, RMSELoss, train_net, val_net
 from misc import export_history, save_checkpoint
 
 '''
@@ -68,10 +69,22 @@ def setup_and_run_train(n_channels, n_classes, dir_img, dir_gt, dir_results, loa
     # Definition of the loss function ADD MORE IF YOU WANT
     if loss == "Dice":
         criterion = DiceLoss()
+    elif loss == "RMSE":
+        criterion = RMSELoss()
+    elif loss == "MSE":
+        criterion = nn.MSELoss()
+    elif loss == "MAE":
+        criterion = nn.L1Loss()
 
     # Definition of the evaluation function
     if evaluation == "Dice":
         criterion_val = DiceLoss()
+    elif evaluation == "RMSE":
+        criterion_val = RMSELoss()
+    elif evaluation == "MSE":
+        criterion_val = nn.MSELoss()
+    elif evaluation == "MAE":
+        criterion_val = nn.L1Loss()
     
     # Saving History to csv
     header = ['epoch', 'train loss', 'train acc', 'val loss', 'val acc']
@@ -131,9 +144,9 @@ def get_args():
                       help='Number of classes of the output.')                  
     parser.add_option('-o', '--optimizer', dest='optimizer', default="Adam", choices=["Adam", "SGD"], 
                       help='Optimizer to use.')
-    parser.add_option('-f', '--loss', dest='loss', default="Dice", choices=["Dice"], 
+    parser.add_option('-f', '--loss', dest='loss', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE"], 
                       help='Loss functios to use.')
-    parser.add_option('-v', '--evaluation', dest='evaluation', default="Dice", choices=["Dice"], 
+    parser.add_option('-v', '--evaluation', dest='evaluation', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE"], 
                       help='Evaluation function to use.')
 
     (options, args) = parser.parse_args()
