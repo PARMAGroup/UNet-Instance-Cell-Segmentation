@@ -115,7 +115,6 @@ class UNet(nn.Module):
         self.up4 = up(128, 64)
         self.outc = outconv(64, n_classes)
         
-        
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)

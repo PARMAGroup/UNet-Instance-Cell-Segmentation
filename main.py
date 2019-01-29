@@ -5,7 +5,7 @@ from optparse import OptionParser
 
 from model import UNet
 from dataset import get_dataloaders
-from train_val import DiceLoss, RMSELoss, train_net, val_net
+from train_val import DiceLoss, RMSELoss, CELoss, WCELoss, train_net #, val_net
 from misc import export_history, save_checkpoint
 
 '''
@@ -13,7 +13,7 @@ from misc import export_history, save_checkpoint
     Runs the training and validation.
 '''
 def setup_and_run_train(n_channels, n_classes, dir_img, dir_gt, dir_results, load, 
-                val_perc, batch_size, epochs, lr, run, optimizer, loss, evaluation):
+                val_perc, batch_size, epochs, lr, run, optimizer, loss, evaluation, dir_weights):
     
     # Use GPU or not
     use_cuda = torch.cuda.is_available()
@@ -30,8 +30,10 @@ def setup_and_run_train(n_channels, n_classes, dir_img, dir_gt, dir_results, loa
         print('Model loaded from {}'.format(load))
 
     # Load the dataset
-    train_loader, val_loader = get_dataloaders(
-        dir_img, dir_gt, val_perc, batch_size)
+    if loss != "WCE":
+        train_loader, val_loader = get_dataloaders(dir_img, dir_gt, val_perc, batch_size)
+    else:
+        train_loader, val_loader = get_dataloaders(dir_img, dir_gt, val_perc, batch_size, isWCE = True, dir_weights = dir_weights)
 
     # Pretty print of the run
     print('''\n
@@ -75,39 +77,33 @@ def setup_and_run_train(n_channels, n_classes, dir_img, dir_gt, dir_results, loa
         criterion = nn.MSELoss()
     elif loss == "MAE":
         criterion = nn.L1Loss()
+    elif loss == "CE":
+        criterion = CELoss()
+    elif loss == "WCE":
+        criterion = WCELoss()
 
-    # Definition of the evaluation function
-    if evaluation == "Dice":
-        criterion_val = DiceLoss()
-    elif evaluation == "RMSE":
-        criterion_val = RMSELoss()
-    elif evaluation == "MSE":
-        criterion_val = nn.MSELoss()
-    elif evaluation == "MAE":
-        criterion_val = nn.L1Loss()
-    
     # Saving History to csv
-    header = ['epoch', 'train loss', 'train acc', 'val loss', 'val acc']
+    header = ['epoch', 'train loss']
 
-    best_acc = 0
+    best_loss = 10000
     time_start = time.time()
     # Run the training and validation
     for epoch in range(epochs):
         print('\nStarting epoch {}/{}.'.format(epoch + 1, epochs))
 
-        train_loss, train_acc = train_net(net, device, train_loader, optimizer, criterion, batch_size)
-        val_loss, val_acc = val_net(net, device, val_loader, criterion_val, batch_size)
+        train_loss = train_net(net, device, train_loader, optimizer, criterion, batch_size, isWCE = (loss == "WCE"))
+        #val_loss = val_net(net, device, val_loader, criterion_val, batch_size)
         
-        values = [epoch+1, train_loss, train_acc, val_loss, val_acc]
+        values = [epoch+1, train_loss]
         export_history(header, values, dir_results, "result"+run+".csv")
         
         # save model
-        if val_acc > best_acc:
-            best_acc = val_acc
+        if train_loss < best_loss:
+            best_loss = train_loss
             save_checkpoint({
                     'epoch': epoch + 1,
                     'state_dict': net.state_dict(),
-                    'acc': val_acc,
+                    'loss': train_loss,
                     'optimizer' : optimizer.state_dict(),
                 }, path=dir_results, filename="weights"+run+".pth")
 
@@ -144,10 +140,12 @@ def get_args():
                       help='Number of classes of the output.')                  
     parser.add_option('-o', '--optimizer', dest='optimizer', default="Adam", choices=["Adam", "SGD"], 
                       help='Optimizer to use.')
-    parser.add_option('-f', '--loss', dest='loss', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE"], 
+    parser.add_option('-f', '--loss', dest='loss', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE", "CE", "WCE"], 
                       help='Loss functios to use.')
-    parser.add_option('-v', '--evaluation', dest='evaluation', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE"], 
+    parser.add_option('-v', '--evaluation', dest='evaluation', default="Dice", choices=["Dice", "RMSE", "MSE", "MAE", "CE", "WCE"], 
                       help='Evaluation function to use.')
+    parser.add_option('-w', '--weights', dest='weights',
+                      default='', help='Which weights should use.')
 
     (options, args) = parser.parse_args()
     return options
@@ -162,9 +160,9 @@ if __name__ == "__main__":
         setup_and_run_train(
                 n_channels = args.n_channels, 
                 n_classes = args.n_classes,
-                dir_img = '../data/'+args.dataset+'/',
-                dir_gt = '../data/'+args.gt+'/',
-                dir_results = '../checkpoints/'+args.savedir+'/',
+                dir_img = args.dataset,
+                dir_gt = args.gt,
+                dir_results = args.savedir,
                 load = args.load,
                 val_perc = args.val_perc,
                 batch_size = args.batchsize,
@@ -173,7 +171,8 @@ if __name__ == "__main__":
                 run=str(r),
                 optimizer = args.optimizer,
                 loss = args.loss,
-                evaluation = args.evaluation)
+                evaluation = args.evaluation,
+                dir_weights = args.weights)
                         
 
 

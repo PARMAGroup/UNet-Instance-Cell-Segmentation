@@ -1,8 +1,8 @@
 import time
-
 import torch.nn as nn
 import torch
-
+import numpy as np
+import torch.nn.functional as F
 from misc import AverageMeter
 
 
@@ -31,36 +31,66 @@ class DiceLoss(nn.Module):
 """
 class RMSELoss(nn.Module):
     def __init__(self):
-        super().__init__()
+        super(RMSELoss, self).__init__()
         self.mse = nn.MSELoss()
         
     def forward(self,yhat,y):
         return torch.sqrt(self.mse(yhat,y))
 
 
+"""
+    Class that defines the Cross Entropy Loss Function
+"""
+class CELoss(nn.Module):
+    def __init__(self):
+        super(CELoss, self).__init__()
+
+    def forward(self, y_pred, y_true):
+        return -torch.mean(torch.sum(y_true*torch.log(F.softmax(y_pred,dim=1)),dim=1))
+
+"""
+    Class that defines the Cross Entropy Loss Function
+""" 
+class WCELoss(nn.Module):
+    def __init__(self):
+        super(WCELoss, self).__init__()
+
+    def forward(self, y_pred, y_true, weights):
+        y_true = y_true/(y_true.sum(2).sum(2,dtype=torch.float).unsqueeze(-1).unsqueeze(-1))
+        y_true[y_true != y_true] = 0.0
+        y_true = torch.sum(y_true,dim=1, dtype = torch.float).unsqueeze(1)
+        y_true = y_true * weights.to(torch.float)
+        old_range = torch.max(y_true) - torch.min(y_true)
+        new_range = 100 - 1
+        y_true = (((y_true - torch.min(y_true)) * new_range) / old_range) + 1
+        return -torch.mean(torch.sum(y_true*torch.log(F.softmax(y_pred,dim=1)),dim=1))
+    
+
 """ 
     Functions that trains a net.
 """
-def train_net(net, device, loader, optimizer, criterion, batch_size):
+def train_net(net, device, loader, optimizer, criterion, batch_size, isWCE=False):
     net.train()
     train_loss = AverageMeter()
-    train_acc = AverageMeter()
     time_start = time.time()
-    for batch_idx, (data, gt) in enumerate(loader):
+    for batch_idx, (data, gt, weights) in enumerate(loader):
 
         # Use GPU or not
         data, gt = data.to(device), gt.to(device)
 
         # Forward
         predictions = net(data)
-
-        # Loss Calculation
-        loss = criterion(predictions, gt)
         
+        # Loss Calculation
+        if not isWCE:
+            loss = criterion(predictions, gt)
+        else:
+            weights = weights.to(device)
+            loss = criterion(predictions, gt, weights)
+
         # Updates the record
         train_loss.update(loss.item(), predictions.size(0))
-        train_acc.update(-loss.item(), predictions.size(0))
-        
+
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
@@ -72,10 +102,9 @@ def train_net(net, device, loader, optimizer, criterion, batch_size):
 
     time_dif = time.time() - time_start
     print('\nAverage Training Loss: ' + str(train_loss.avg))
-    print('\nAverage Training Accuracy: ' + str(train_acc.avg))
     print('Train Time: It tooks %.4fs to finish the epoch.' % (time_dif))
             
-    return train_loss.avg, train_acc.avg
+    return train_loss.avg
 
 
 """ 
@@ -84,7 +113,6 @@ def train_net(net, device, loader, optimizer, criterion, batch_size):
 def val_net(net, device, loader, criterion, batch_size):
     net.eval()
     val_loss = AverageMeter()
-    val_acc = AverageMeter()
     time_start = time.time()
     with torch.no_grad():
         for batch_idx, (data, gt) in enumerate(loader):
@@ -100,7 +128,6 @@ def val_net(net, device, loader, criterion, batch_size):
 
             # Updates the record
             val_loss.update(loss.item(), predictions.size(0))
-            val_acc.update(-loss.item(), predictions.size(0))
             
             print('[{}/{} ({:.0f}%)]\t\tLoss: {:.6f}'.format(
                 batch_idx * len(data), len(loader)*batch_size,
@@ -108,7 +135,6 @@ def val_net(net, device, loader, criterion, batch_size):
     
     time_dif = time.time() - time_start
     print('\nValidation set: Average loss: '+ str(val_loss.avg))
-    print('\nAverage Validation Accuracy: ' + str(val_acc.avg))
     print('Validation time: It tooks %.4fs to finish the Validation.' % (time_dif))
     
-    return val_loss.avg, val_acc.avg
+    return val_loss.avg

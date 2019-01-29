@@ -4,11 +4,11 @@
 
 #PBS -q gpu-n1h72
 
-#PBS -l nodes=tule-02.cnca:ppn=1
+#PBS -l nodes=tule-00.cnca:ppn=1
 
 #PBS -l walltime=71:59:59
 
-#PBS -o /home/mamendez/unet/src/corrida_data_dist_trans_30_epochs.txt
+#PBS -o /home/mamendez/unet_top_models/Predictions_CE_GT.txt
 
 module load opencv/2.4.13.3
 
@@ -24,4 +24,4 @@ module load tiff/3.9.7
 
 cd $PBS_O_WORKDIR
 
-python ~/unet/src/main.py -d Data -g GT_Distance_Transform -s Dist_Trans 
+python ~/unet_top_models/main.py -d '../Datasets/Distance_Transform/Train/' -g '../Datasets/Border/Train/' -c 3 -s './checkpoints/Border_CE_GT/' -t 0.0 -e 50 -r 1 -f CE
